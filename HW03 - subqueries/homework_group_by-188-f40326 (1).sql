@@ -30,20 +30,19 @@ USE WideWorldImporters
 Продажи смотреть в таблице Sales.Invoices и связанных таблицах.
 */
 
+USE WideWorldImporters;
+
 SELECT
-    YEAR(SI.InvoiceDate) AS [Год продажи],
-    MONTH(SI.InvoiceDate) AS [Месяц продажи],
+    DATEPART(YEAR, SI.InvoiceDate) AS [Год продажи],
+    DATEPART(MONTH, SI.InvoiceDate) AS [Месяц продажи],
     AVG(SIL.UnitPrice) AS [Средняя цена за месяц],
     SUM(SIL.UnitPrice * SIL.Quantity) AS [Общая сумма продаж за месяц]
 FROM
     Sales.Invoices SI
     INNER JOIN Sales.InvoiceLines SIL ON SI.InvoiceID = SIL.InvoiceID
-WHERE
-    YEAR(SI.InvoiceDate) = 2015 AND
-    MONTH(SI.InvoiceDate) = 4
 GROUP BY
-    YEAR(SI.InvoiceDate),
-    MONTH(SI.InvoiceDate)
+    DATEPART(YEAR, SI.InvoiceDate),
+    DATEPART(MONTH, SI.InvoiceDate)
 ORDER BY
     [Год продажи],
     [Месяц продажи];
@@ -60,18 +59,15 @@ ORDER BY
 */
 
 SELECT
-    YEAR(SI.InvoiceDate) AS [Год продажи],
-    MONTH(SI.InvoiceDate) AS [Месяц продажи],
+    DATEPART(YEAR, SI.InvoiceDate) AS [Год продажи],
+    DATEPART(MONTH, SI.InvoiceDate) AS [Месяц продажи],
     SUM(SIL.UnitPrice * SIL.Quantity) AS [Общая сумма продаж]
 FROM
     Sales.Invoices SI
     INNER JOIN Sales.InvoiceLines SIL ON SI.InvoiceID = SIL.InvoiceID
-WHERE
-    YEAR(SI.InvoiceDate) = 2015 AND
-    MONTH(SI.InvoiceDate) = 4
 GROUP BY
-    YEAR(SI.InvoiceDate),
-    MONTH(SI.InvoiceDate)
+    DATEPART(YEAR, SI.InvoiceDate),
+    DATEPART(MONTH, SI.InvoiceDate)
 HAVING
     SUM(SIL.UnitPrice * SIL.Quantity) > 4600000
 ORDER BY
