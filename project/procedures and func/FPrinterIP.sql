@@ -11,7 +11,7 @@ BEGIN
 
     SELECT @IP = ip_адрес
     FROM Принтер
-    WHERE название = @Принтер;
+    WHERE модель = @Принтер;
 
     RETURN @IP;
 END;
