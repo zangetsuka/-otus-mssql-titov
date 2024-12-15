@@ -42,4 +42,43 @@ InvoiceMonth | Aakriti Byrraju    | Abel Spirlea       | Abel Tatarescu | ... (�
 */
 
 
-напишите здесь свое решение
+DECLARE @cols AS NVARCHAR(MAX), @query AS NVARCHAR(MAX);
+
+-- Получаем список клиентов для динамического PIVOT с использованием XML PATH, чтобы обойти ограничение по длине строки
+SELECT @cols = STUFF((
+    SELECT ', ' + QUOTENAME(CustomerName)
+    FROM Sales.Customers
+    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+-- Формируем динамический SQL-запрос
+SET @query = '
+SELECT 
+    FORMAT(InvoiceMonth, ''dd.MM.yyyy'') AS InvoiceMonth, ' + @cols + '
+FROM 
+(
+    SELECT 
+        CAST(DATEFROMPARTS(YEAR(I.InvoiceDate), MONTH(I.InvoiceDate), 1) AS DATE) AS InvoiceMonth, 
+        C.CustomerName, 
+        COUNT(*) AS PurchaseCount
+    FROM 
+        Sales.Invoices I
+    INNER JOIN 
+        Sales.Customers C ON I.CustomerID = C.CustomerID
+    GROUP BY 
+        CAST(DATEFROMPARTS(YEAR(I.InvoiceDate), MONTH(I.InvoiceDate), 1) AS DATE), 
+        C.CustomerName
+) AS SourceTable
+PIVOT
+(
+    MAX(PurchaseCount) 
+    FOR CustomerName IN (' + @cols + ')
+) AS PivotTable
+ORDER BY 
+    InvoiceMonth;';
+
+-- Выполняем динамический SQL-запрос
+EXEC sp_executesql @query;
+
+
+
+
