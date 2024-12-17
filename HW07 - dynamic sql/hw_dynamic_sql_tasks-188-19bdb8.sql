@@ -42,42 +42,37 @@ InvoiceMonth | Aakriti Byrraju    | Abel Spirlea       | Abel Tatarescu | ... (�
 */
 
 
-DECLARE @cols AS NVARCHAR(MAX), @query AS NVARCHAR(MAX);
+DECLARE @DynamicSQL AS NVARCHAR(MAX)
+DECLARE @CustomerColumns AS NVARCHAR(MAX)
 
--- Получаем список клиентов для динамического PIVOT с использованием XML PATH, чтобы обойти ограничение по длине строки
-SELECT @cols = STUFF((
-    SELECT ', ' + QUOTENAME(CustomerName)
-    FROM Sales.Customers
-    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+-- Собираем список имен клиентов для использования в PIVOT
+SELECT @CustomerColumns = STUFF((
+    SELECT ',' + QUOTENAME(CustomerName)
+    FROM (SELECT DISTINCT CustomerName FROM Sales.Customers) AS Customers
+    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '')
 
--- Формируем динамический SQL-запрос
-SET @query = '
-SELECT 
-    FORMAT(InvoiceMonth, ''dd.MM.yyyy'') AS InvoiceMonth, ' + @cols + '
-FROM 
-(
-    SELECT 
-        CAST(DATEFROMPARTS(YEAR(I.InvoiceDate), MONTH(I.InvoiceDate), 1) AS DATE) AS InvoiceMonth, 
-        C.CustomerName, 
-        COUNT(*) AS PurchaseCount
-    FROM 
-        Sales.Invoices I
-    INNER JOIN 
-        Sales.Customers C ON I.CustomerID = C.CustomerID
-    GROUP BY 
-        CAST(DATEFROMPARTS(YEAR(I.InvoiceDate), MONTH(I.InvoiceDate), 1) AS DATE), 
-        C.CustomerName
-) AS SourceTable
-PIVOT
-(
-    MAX(PurchaseCount) 
-    FOR CustomerName IN (' + @cols + ')
-) AS PivotTable
-ORDER BY 
-    InvoiceMonth;';
+-- Выводим результат для отладки
+SELECT @CustomerColumns AS CustomerColumns;
 
--- Выполняем динамический SQL-запрос
-EXEC sp_executesql @query;
+-- Формируем динамический SQL запрос для PIVOT
+SET @DynamicSQL = N'SELECT InvoiceMonth, ' + @CustomerColumns + ' 
+                   FROM (
+                        SELECT 
+                            FORMAT(DATEADD(MONTH, DATEDIFF(MONTH, 0, i.InvoiceDate), 0), ''dd/MM/yyyy'') AS InvoiceMonth,
+                            c.CustomerName AS CustomerName,
+                            i.OrderID
+                        FROM Sales.Invoices AS i
+                        JOIN Sales.Customers AS c
+                            ON i.CustomerID = c.CustomerID
+                   ) AS SourceTable
+                   PIVOT (
+                        COUNT(OrderID)
+                        FOR CustomerName IN (' + @CustomerColumns + ')
+                   ) AS PivotTable;'
+
+-- Выполняем сформированный динамический SQL
+EXEC sp_executesql @DynamicSQL;
+
 
 
 
