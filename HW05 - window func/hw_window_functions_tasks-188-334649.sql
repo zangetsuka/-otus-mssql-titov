@@ -38,88 +38,113 @@ USE WideWorldImporters
 Нарастающий итог должен быть без оконной функции.
 */
 
-SET STATISTICS TIME, IO ON;
-WITH MonthlySales AS (
+;WITH InvoiceData AS
+(
     SELECT
-        YEAR(SI.InvoiceDate) AS [Год],
-        MONTH(SI.InvoiceDate) AS [Месяц],
-        SUM(SIL.UnitPrice * SIL.Quantity) AS [Сумма продаж]
-    FROM
-        Sales.Invoices SI
-        INNER JOIN Sales.InvoiceLines SIL ON SI.InvoiceID = SIL.InvoiceID
-    WHERE
-        YEAR(SI.InvoiceDate) >= 2015
-    GROUP BY
-        YEAR(SI.InvoiceDate),
-        MONTH(SI.InvoiceDate)
-),
-CumulativeSales AS (
-    SELECT
-        MS.[Год],
-        MS.[Месяц],
-        SUM(MS2.[Сумма продаж]) AS [Нарастающий итог]
-    FROM
-        MonthlySales MS
-        INNER JOIN MonthlySales MS2
-            ON MS2.[Год] = MS.[Год] AND MS2.[Месяц] <= MS.[Месяц]
-    GROUP BY
-        MS.[Год],
-        MS.[Месяц]
+        i.InvoiceID AS id_продажи,
+        i.InvoiceDate AS дата_продажи,
+        c.CustomerName AS название_клиента,
+        SUM(il.Quantity * il.UnitPrice) AS сумма_продажи
+    FROM Sales.Invoices i
+    LEFT JOIN Sales.InvoiceLines il
+        ON i.InvoiceID = il.InvoiceID
+    JOIN Sales.Customers c
+        ON c.CustomerID = i.CustomerID
+    WHERE YEAR(i.InvoiceDate) >= 2015
+    GROUP BY i.InvoiceID, i.InvoiceDate, c.CustomerName
 )
-SELECT
-    SI.InvoiceID AS [ID продажи],
-    C.CustomerName AS [Название клиента],
-    SI.InvoiceDate AS [Дата продажи],
-    SUM(SIL.UnitPrice * SIL.Quantity) AS [Сумма продажи],
-    CS.[Нарастающий итог]
-FROM
-    Sales.Invoices SI
-    INNER JOIN Sales.InvoiceLines SIL ON SI.InvoiceID = SIL.InvoiceID
-    INNER JOIN Sales.Customers C ON SI.CustomerID = C.CustomerID
-    INNER JOIN CumulativeSales CS
-        ON YEAR(SI.InvoiceDate) = CS.[Год] AND MONTH(SI.InvoiceDate) = CS.[Месяц]
-WHERE
-    YEAR(SI.InvoiceDate) >= 2015
-GROUP BY
-    SI.InvoiceID, 
-    C.CustomerName, 
-    SI.InvoiceDate,
-    CS.[Нарастающий итог]
-ORDER BY
-    SI.InvoiceDate;
+SELECT 
+    inv.id_продажи,
+    inv.название_клиента,
+    inv.дата_продажи,
+    inv.сумма_продажи,
+    SUM(inv2.сумма_продажи) AS нарастающий_итог
+FROM InvoiceData inv
+INNER JOIN InvoiceData inv2
+    ON YEAR(inv2.дата_продажи) < YEAR(inv.дата_продажи) 
+       OR (YEAR(inv2.дата_продажи) = YEAR(inv.дата_продажи) 
+           AND MONTH(inv2.дата_продажи) <= MONTH(inv.дата_продажи))
+GROUP BY 
+    YEAR(inv.дата_продажи), 
+    MONTH(inv.дата_продажи), 
+    inv.id_продажи, 
+    inv.название_клиента, 
+    inv.дата_продажи, 
+    inv.сумма_продажи
+ORDER BY inv.дата_продажи, inv.id_продажи;
 
 
 /*
 2. Сделайте расчет суммы нарастающим итогом в предыдущем запросе с помощью оконной функции.
    Сравните производительность запросов 1 и 2 с помощью set statistics time, io on
 */
+;WITH InvoiceData AS
+(
+    SELECT
+        i.InvoiceID AS id_продажи,
+        i.InvoiceDate AS дата_продажи,
+        c.CustomerName AS название_клиента,
+        SUM(il.Quantity * il.UnitPrice) AS сумма_продажи
+    FROM Sales.Invoices i
+    LEFT JOIN Sales.InvoiceLines il
+        ON i.InvoiceID = il.InvoiceID
+    JOIN Sales.Customers c
+        ON c.CustomerID = i.CustomerID
+    WHERE YEAR(i.InvoiceDate) >= 2015
+    GROUP BY i.InvoiceID, i.InvoiceDate, c.CustomerName
+)
+SELECT 
+    inv.id_продажи,
+    inv.название_клиента,
+    inv.дата_продажи,
+    inv.сумма_продажи,
+    SUM(inv.сумма_продажи) OVER (
+        PARTITION BY YEAR(inv.дата_продажи), MONTH(inv.дата_продажи) 
+        ORDER BY inv.дата_продажи
+    ) AS нарастающий_итог
+FROM InvoiceData inv
+ORDER BY inv.дата_продажи, inv.id_продажи;
 
-
-SELECT
-    SI.InvoiceID AS [ID продажи],
-    C.CustomerName AS [Название клиента],
-    SI.InvoiceDate AS [Дата продажи],
-    SUM(SIL.UnitPrice * SIL.Quantity) AS [Сумма продажи],
-    SUM(SUM(SIL.UnitPrice * SIL.Quantity)) 
-        OVER (ORDER BY YEAR(SI.InvoiceDate), MONTH(SI.InvoiceDate) ROWS UNBOUNDED PRECEDING) AS [Нарастающий итог]
-FROM
-    Sales.Invoices SI
-    INNER JOIN Sales.InvoiceLines SIL ON SI.InvoiceID = SIL.InvoiceID
-    INNER JOIN Sales.Customers C ON SI.CustomerID = C.CustomerID
-WHERE
-    YEAR(SI.InvoiceDate) >= 2015
-GROUP BY
-    SI.InvoiceID, 
-    C.CustomerName, 
-    SI.InvoiceDate
-ORDER BY
-    SI.InvoiceDate;
-
+SET STATISTICS TIME ON;
+SET STATISTICS IO ON;
 
 	--Анализ потребления ресурсов
-	-- 1 запрос:  SQL Server Execution Times:CPU time = 187 ms,  elapsed time = 966 ms.
-	-- 2 запрос:  SQL Server Execution Times:CPU time = 188 ms,  elapsed time = 969 ms.
-	--Исходя из этих данных, производительность обоих запросов практически идентична. Однако, оконная функция обладает преимуществом, поскольку jна более читабельна и упрощает код и оконные функции часто лучше масштабируются на больших объемах данных.
+-- Сравнение производительности запросов нарастающего итога
+-- =====================================================================
+-- Запрос без оконной функции:
+-- ---------------------------------------------------------------------
+-- 1. Количество строк: 31440
+-- 2. CPU time: 3171 ms
+-- 3. Elapsed time: 9694 ms
+-- 4. Logical reads (таблицы):
+--    - InvoiceLines: Scan count 4, lob logical reads 322
+--    - Worktable: Logical reads 70850
+--    - Workfile: Logical reads 144
+--    - Invoices: Logical reads 22800
+--    - Customers: Logical reads 45
+-- Итог: запрос использует большое количество ресурсов ввода-вывода и требует значительного времени выполнения.
+
+-- ---------------------------------------------------------------------
+-- Запрос с оконной функцией:
+-- ---------------------------------------------------------------------
+-- 1. Количество строк: 31440
+-- 2. CPU time: 313 ms
+-- 3. Elapsed time: 5113 ms
+-- 4. Logical reads (таблицы):
+--    - InvoiceLines: Scan count 2, lob logical reads 161
+--    - Worktable: Logical reads 0
+--    - Invoices: Logical reads 11400
+--    - Customers: Logical reads 41
+-- Итог: запрос с оконной функцией значительно оптимальнее, так как использует меньше операций чтения 
+--       и занимает меньше времени выполнения.
+
+-- =====================================================================
+-- Вывод:
+-- Запрос с оконной функцией имеет явное преимущество:
+-- 1. Сокращено количество логических чтений.
+-- 2. Уменьшено потребление CPU (в 10 раз).
+-- 3. Время выполнения сокращено почти в 2 раза.
+-- Рекомендуется использовать оконную функцию для расчёта нарастающего итога.
 3. Вывести список 2х самых популярных продуктов (по количеству проданных) 
 в каждом месяце за 2016 год (по 2 самых популярных продукта в каждом месяце).
 */
@@ -174,39 +199,23 @@ ORDER BY
 Для этой задачи НЕ нужно писать аналог без аналитических функций.
 */
 
-WITH ИнформацияОТоварах AS (
-    SELECT 
-        SI.StockItemID AS [ID товара],
-        SI.StockItemName AS [Название],
-        SI.Brand AS [Брэнд],
-        SI.UnitPrice AS [Цена],
-        SI.TypicalWeightPerUnit AS [Вес товара],
-        ROW_NUMBER() OVER (PARTITION BY SI.StockItemName ORDER BY SI.StockItemName) AS [Номер],
-        COUNT(*) OVER () AS [Общее количество товаров],
-        COUNT(*) OVER (PARTITION BY LEFT(SI.StockItemName, 1)) AS [Количество по первой букве],
-        LEAD(SI.StockItemID) OVER (ORDER BY SI.StockItemName) AS [Следующий ID],
-        LAG(SI.StockItemID) OVER (ORDER BY SI.StockItemName) AS [Предыдущий ID],
-        LAG(SI.StockItemName, 2, 'Нет товаров') OVER (ORDER BY SI.StockItemName) AS [Название 2 строки назад],
-        NTILE(30) OVER (ORDER BY SI.TypicalWeightPerUnit) AS [Группа по весу]
-    FROM 
-        Warehouse.StockItems SI
-)
-SELECT 
-    [ID товара],
-    [Название],
-    [Брэнд],
-    [Цена],
-    [Номер],
-    [Общее количество товаров],
-    [Количество по первой букве],
-    [Следующий ID],
-    [Предыдущий ID],
-    [Название 2 строки назад],
-    [Группа по весу]
-FROM 
-    ИнформацияОТоварах
-ORDER BY 
-    [Название];
+SELECT
+    StockItemID AS ItemID,
+    StockItemName AS ItemName,
+    Brand AS Brand,
+    UnitPrice AS Price,
+    DENSE_RANK() OVER (ORDER BY LEFT(StockItemName, 1)) AS NameRank,
+    SUM(QuantityPerOuter) OVER (PARTITION BY StockItemID) AS TotalQuantity,
+    SUM(QuantityPerOuter) OVER (PARTITION BY LEFT(StockItemName, 1)) AS QuantityByLetter,
+    LEAD(StockItemID) OVER (ORDER BY StockItemName) AS NextItemID,
+    LAG(StockItemID) OVER (ORDER BY StockItemName) AS PrevItemID,
+    LAG(StockItemName, 2, 'No items') OVER (ORDER BY StockItemName) AS NameTwoRowsAgo,
+    NTILE(30) OVER (ORDER BY TypicalWeightPerUnit) AS WeightGroup
+FROM Warehouse.StockItems;
+
+
+
+
 /*
 5. По каждому сотруднику выведите последнего клиента, которому сотрудник что-то продал.
    В результатах должны быть ид и фамилия сотрудника, ид и название клиента, дата продажи, сумму сделки.
@@ -246,34 +255,33 @@ ORDER BY
 В результатах должно быть ид клиета, его название, ид товара, цена, дата покупки.
 */
 
-WITH ТоварыПоКлиентам AS (
-    SELECT
-        SI.CustomerID AS [ID клиента],
-        C.CustomerName AS [Название клиента],
-        SIL.StockItemID AS [ID товара],
-        SIL.UnitPrice AS [Цена],
-        SI.InvoiceDate AS [Дата покупки],
-        ROW_NUMBER() OVER (
-            PARTITION BY SI.CustomerID
-            ORDER BY SIL.UnitPrice DESC
-        ) AS [Номер товара]
-    FROM
-        Sales.Invoices SI
-        INNER JOIN Sales.InvoiceLines SIL ON SI.InvoiceID = SIL.InvoiceID
-        INNER JOIN Sales.Customers C ON SI.CustomerID = C.CustomerID
-)
 SELECT
-    [ID клиента],
-    [Название клиента],
-    [ID товара],
-    [Цена],
-    [Дата покупки]
-FROM
-    ТоварыПоКлиентам
-WHERE
-    [Номер товара] <= 2
-ORDER BY
-    [ID клиента],
-    [Номер товара];
+    CustomerID AS Customer_ID,
+    CustomerName AS Customer_Name,
+    StockItemID AS Item_ID,
+    StockItemDescription AS Item_Description,
+    UnitPrice AS Price,
+    InvoiceDate AS Purchase_Date
+FROM (
+    SELECT
+        i.CustomerID,
+        c.CustomerName,
+        il.StockItemID,
+        il.Description AS StockItemDescription,
+        il.UnitPrice,
+        MAX(i.InvoiceDate) AS InvoiceDate,
+        DENSE_RANK() OVER (PARTITION BY i.CustomerID ORDER BY il.UnitPrice DESC, il.StockItemID) AS Rank
+    FROM Sales.Invoices AS i
+    JOIN Sales.InvoiceLines AS il ON i.InvoiceID = il.InvoiceID
+    JOIN Warehouse.StockItems AS si ON si.StockItemID = il.StockItemID
+    JOIN Sales.Customers AS c ON c.CustomerID = i.CustomerID
+    GROUP BY
+        i.CustomerID,
+        c.CustomerName,
+        il.StockItemID,
+        il.Description,
+        il.UnitPrice
+) AS TopSalesProducts
+WHERE Rank <= 2
+ORDER BY Customer_ID, Price DESC;
 
-Опционально можете для каждого запроса без оконных функций сделать вариант запросов с оконными функциями и сравнить их производительность. 
