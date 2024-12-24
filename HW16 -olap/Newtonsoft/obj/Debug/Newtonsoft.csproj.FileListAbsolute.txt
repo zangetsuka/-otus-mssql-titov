@@ -1,0 +1,9 @@
+C:\Users\Администратор\Desktop\otus-mssql-titov\HW16 -olap\Newtonsoft\bin\Debug\Newtonsoft.dll
+C:\Users\Администратор\Desktop\otus-mssql-titov\HW16 -olap\Newtonsoft\bin\Debug\Newtonsoft.pdb
+C:\Users\Администратор\Desktop\otus-mssql-titov\HW16 -olap\Newtonsoft\bin\Debug\Newtonsoft.Json.dll
+C:\Users\Администратор\Desktop\otus-mssql-titov\HW16 -olap\Newtonsoft\bin\Debug\Newtonsoft.Json.xml
+C:\Users\Администратор\Desktop\otus-mssql-titov\HW16 -olap\Newtonsoft\obj\Debug\Newtonsoft.csproj.AssemblyReference.cache
+C:\Users\Администратор\Desktop\otus-mssql-titov\HW16 -olap\Newtonsoft\obj\Debug\Newtonsoft.csproj.CoreCompileInputs.cache
+C:\Users\Администратор\Desktop\otus-mssql-titov\HW16 -olap\Newtonsoft\obj\Debug\Newtonsoft.csproj.Up2Date
+C:\Users\Администратор\Desktop\otus-mssql-titov\HW16 -olap\Newtonsoft\obj\Debug\Newtonsoft.dll
+C:\Users\Администратор\Desktop\otus-mssql-titov\HW16 -olap\Newtonsoft\obj\Debug\Newtonsoft.pdb
